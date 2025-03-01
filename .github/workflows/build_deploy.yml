@@ -1,0 +1,60 @@
+name: Build and Deploy to AWS Lambda
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Build the Docker image 
+      - name: Build Docker image
+        run: docker build -t my-lambda-app:latest .
+
+      # log into Amazon 
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      # tag + push the image to Amazon ECR
+      - name: Tag and push image to ECR
+        run: |
+          # Retrieve your AWS account ID
+          ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+          REGION=${{ secrets.AWS_REGION }}
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com"
+          ECR_REPOSITORY="my-lambda-app"
+          IMAGE_TAG="latest"
+
+          # Tag the Docker image with the ECR repository URI
+          docker tag my-lambda-app:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          # Push the image to Amazon ECR
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      # Update the AWS Lambda function to use the new image
+      - name: Update Lambda Function
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+          REGION=${{ secrets.AWS_REGION }}
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com"
+          ECR_REPOSITORY="my-lambda-app"
+          IMAGE_TAG="latest"
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+          # Update the Lambda function with the new container image
+          aws lambda update-function-code --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} --image-uri $IMAGE_URI
