@@ -17,4 +17,4 @@ def get_response(user_message: str) -> str:
         print(f'{e}there was an error parsing the response')
 
 # make a post request to this url to initiate a conversation with the RAG model with payload of user's query
-# intiate a conversation by "!"
+# intiate a through conversation by "!ask"
